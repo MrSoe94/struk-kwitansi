@@ -1,3 +1,5 @@
+https://mrsoe94.github.io/struk-kwitansi/
+
 # RekaDok — Versi HTML Murni
 
 Port lengkap aplikasi **RekaDok** (Generator Dokumen Bisnis Indonesia) ke
