@@ -41,6 +41,10 @@ const ICON_PATHS = {
   refresh: '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4h-4"/>',
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   users: '<circle cx="9" cy="8" r="3"/><path d="M2.5 19.5c.6-3.2 3.2-4.6 6.5-4.6s5.9 1.4 6.5 4.6"/><path d="M16.5 5.7a3 3 0 0 1 0 5.6"/><path d="M17.5 15.2c2.2.5 3.6 1.9 4 4.3"/>',
+  image: '<rect x="3" y="4.5" width="18" height="15" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="m4 17.5 4.5-4.5 3.5 3.5 3-3L20 18"/>',
+  upload: '<path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16"/>',
+  pen: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  swap: '<path d="M4 8h13"/><path d="m13 4.5 4 3.5-4 3.5"/><path d="M20 16H7"/><path d="m11 12.5-4 3.5 4 3.5"/>',
 };
 
 function icon(name, size) {
@@ -181,7 +185,7 @@ const DOC_TYPES = [
     template: `Bahwa pada hari ini {hari_tanggal}, bertempat di {kota}, telah dilaksanakan serah terima {objek} antara {perusahaan}, yang diwakili oleh {ttd_company} (Pihak Pertama), dengan {nama}, beralamat di {alamat} (Pihak Kedua).\n\nSetelah dilakukan pemeriksaan bersama, Pihak Kedua menyatakan bahwa seluruh objek tersebut telah diterima dalam keadaan lengkap, baik, dan sesuai dengan ketentuan yang telah disepakati. Dengan demikian, serah terima dinyatakan sah dan selesai serta tidak dapat diganggu gugat.\n\nDemikian berita acara ini dibuat dengan sebenarnya untuk dipergunakan sebagaimana mestinya.` },
   { id:"sptjm", label:"SPTJM", docTitle:"SURAT PERNYATAAN TANGGUNG JAWAB MUTLAK", desc:"Surat pernyataan tanggung jawab", category:"Surat Resmi", prefix:"PTJM", layout:"surat", hasItems:false, hasPpn:false, hasCustomer:true, hasBody:true,
     fields:[{ key:"jabatan", label:"Jabatan" },{ key:"identitas", label:"No. KTP / Identitas" },{ key:"kota", label:"Kota" }],
-    signatures:[{ label:"Yang Menyatakan", party:"customer" }], icon:"sptjm",
+    signatures:[{ label:"Yang Menyatakan", party:"customer" }], icon:"sptjm", tightTitle:true,
     template: `Yang bertanda tangan di bawah ini:\n\nNama : {nama}\nJabatan : {jabatan}\nAlamat : {alamat}\nNo. Identitas : {identitas}\n\nDengan ini menyatakan dengan sesungguhnya bahwa seluruh data dan informasi yang kami berikan adalah benar dan dapat dipertanggungjawabkan. Apabila di kemudian hari ditemukan kekeliruan atau ketidakbenaran dalam data tersebut, kami bersedia menanggung segala akibat yang timbul serta dapat dimintai keterangan lebih lanjut kapan pun dibutuhkan.\n\nDemikian surat pernyataan tanggung jawab mutlak ini dibuat dengan sadar dan tanpa adanya paksaan dari pihak mana pun, untuk dapat dipergunakan sebagaimana mestinya.` },
   { id:"perjanjian", label:"Surat Perjanjian", docTitle:"SURAT PERJANJIAN", desc:"Perjanjian kerja sama / jasa", category:"Surat Resmi", prefix:"PRJ", layout:"surat", hasItems:false, hasPpn:false, hasCustomer:true, hasBody:true,
     fields:[{ key:"objek", label:"Objek / Pasal 1", placeholder:"cth penyediaan jasa desain interior kantor" },{ key:"masa", label:"Masa berlaku / Pasal 3", placeholder:"cth 6 (enam) bulan" },{ key:"kota", label:"Kota" }],
@@ -203,8 +207,8 @@ function typeById(id) {
   return DOC_TYPES.find((t) => t.id === id) || DOC_TYPES.find((t) => t.id === "invoice");
 }
 
-const EMPTY_COMPANY = { name:"", address:"", phone:"", email:"", website:"", npwp:"", npkp:"", signatory:"", signatoryTitle:"" };
-const EMPTY_CUSTOMER = { name:"", address:"", phone:"", npwp:"" };
+const EMPTY_COMPANY = { name:"", address:"", phone:"", email:"", website:"", npwp:"", npkp:"", signatory:"", signatoryTitle:"", logo:"", signatureImg:"" };
+const EMPTY_CUSTOMER = { name:"", address:"", phone:"", npwp:"", signatureImg:"" };
 
 function normalizeCompany(c) { return { ...EMPTY_COMPANY, ...(c || {}) }; }
 function normalizeCustomer(c) { return { ...EMPTY_CUSTOMER, ...(c || {}) }; }
@@ -367,6 +371,36 @@ function loadSettings() {
 }
 function saveSettings(s) {
   localStorage.setItem(LS_SETTINGS, JSON.stringify({ ...s, updatedAt: new Date().toISOString() }));
+}
+
+/* Baca berkas gambar dari <input type=file>, persegi kecil, jadikan data URL.
+   ponytail: tidak tulis ke disk — data URL ikut di profil perusahaan supaya
+   dokumen lama tetap mencetak logo/TTD-nya. */
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+function readImageFile(file, maxW) {
+  return new Promise((resolve, reject) => {
+    if (!/^image\//.test(file.type)) return reject(new Error("Berkas harus berupa gambar (PNG/JPEG)."));
+    if (file.size > MAX_IMAGE_BYTES) return reject(new Error("Ukuran gambar maksimal 5 MB."));
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error("Gagal membaca berkas gambar."));
+    fr.onload = () => {
+      const dataUrl = fr.result;
+      const img = new Image();
+      img.onerror = () => reject(new Error("Berkas bukan gambar yang valid."));
+      img.onload = () => {
+        if (img.width <= maxW) return resolve(dataUrl);
+        const canvas = document.createElement("canvas");
+        canvas.width = maxW;
+        canvas.height = Math.max(1, Math.round((img.height * maxW) / img.width));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve(dataUrl);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL(/jpe?g/i.test(file.type) ? "image/jpeg" : "image/png", 0.9));
+      };
+      img.src = dataUrl;
+    };
+    fr.readAsDataURL(file);
+  });
 }
 
 function issueNumber(typeId) {

@@ -97,6 +97,7 @@
 
   function customerCard() {
     const c = draft.customer;
+    const custSig = def().signatures.find((s) => s.party === "customer");
     return `
     <div class="card" style="padding:16px">
       <div class="section-h" style="margin-bottom:12px">${ic("users", 16)} Data Penerima</div>
@@ -116,6 +117,54 @@
         <div>
           <label class="label">NPWP</label>
           <input class="input mono" data-c="npwp" value="${esc(c.npwp)}" />
+        </div>
+        ${custSig ? `
+        <div class="span2 imgup-row">
+          <div class="imgup">
+            <label class="label">Tanda Tangan (${esc(custSig.label)})</label>
+            <div class="imgup-box" data-img-box="csig">
+              ${c.signatureImg ? `<img src="${c.signatureImg}" alt="">` : `<span class="imgup-ph">${ic("image", 20)}</span>`}
+            </div>
+            <div class="imgup-btns">
+              <button class="btn-ghost sm" type="button" data-img-pick="csig">${ic("upload", 14)} ${c.signatureImg ? "Ganti" : "Unggah"}</button>
+              ${c.signatureImg ? `<button class="btn-ghost sm danger" type="button" data-img-clear="csig">${ic("trash", 14)} Hapus</button>` : ""}
+            </div>
+            <p class="hint">Tanda tangan pihak pelanggan untuk kolom TTD di dokumen ini.</p>
+            <input type="file" accept="image/*" data-img-input="csig" style="display:none" />
+          </div>
+        </div>` : ""}
+      </div>
+    </div>`;
+  }
+
+  function signatoryCard() {
+    const c = draft.company;
+    const s = settings.company;
+    const d = def();
+    return `
+    <div class="card" style="padding:16px">
+      <div class="section-h" style="margin-bottom:4px">${ic("pen", 16)} Penandatangan</div>
+      <p class="hint" style="margin-bottom:12px">
+        Nama &amp; jabatan ini tampil di kolom TTD perusahaan. Diambil bawaan dari
+        <a class="link-underline" href="pengaturan.html">Pengaturan</a>, bisa dikustom untuk dokumen ini.
+      </p>
+      ${d.signatures && d.signatures.length >= 2 ? `
+      <div class="swap-row">
+        <div class="hint">Posisi TTD: <b>${d.signatures.map((x) => esc(x.label)).join(" ↔ ")}</b></div>
+        <div class="seg" data-swap-group>
+          ${[["", "Normal"], ["swap", "Tukar Kolom"], ["img", "Tukar Gambar"]]
+            .map(([v, lbl]) => `<button type="button" class="seg-btn${(draft.meta.swapSignature || "") === v ? " on" : ""}" data-swap="${v}" title="${v === "swap" ? "Tukar kolom kiri <-> kanan" : v === "img" ? "Tukar hanya gambar TTD; label & nama tetap" : "Posisi bawaan"}">${lbl}</button>`)
+            .join("")}
+        </div>
+      </div>` : ""}
+      <div class="form-grid-2">
+        <div>
+          <label class="label">Nama Penandatangan</label>
+          <input class="input" data-sig="signatory" value="${esc(c.signatory)}" placeholder="${esc(s.signatory || "cth Budi Santoso")}" />
+        </div>
+        <div>
+          <label class="label">Jabatan Penandatangan</label>
+          <input class="input" data-sig="signatoryTitle" value="${esc(c.signatoryTitle)}" placeholder="${esc(s.signatoryTitle || "cth Direktur Utama")}" />
         </div>
       </div>
     </div>`;
@@ -229,6 +278,7 @@
     const d = def();
     const parts = [infoCard()];
     if (d.hasCustomer) parts.push(customerCard());
+    if (d.signatures && d.signatures.some((s) => s.party === "company")) parts.push(signatoryCard());
     if (d.layout === "kwitansi") parts.push(kwitansiCard());
     if (d.hasItems && d.layout !== "kwitansi") parts.push(itemsCard());
     if (d.fields && d.fields.length) parts.push(fieldsCard());
@@ -415,6 +465,15 @@
     const dstatus = document.getElementById("dstatus");
     if (dstatus) dstatus.addEventListener("change", () => { draft.status = dstatus.value; });
 
+    const swapSig = document.querySelector("[data-swap-group]");
+    if (swapSig) swapSig.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-swap]");
+      if (!b) return;
+      draft.meta = draft.meta || {};
+      draft.meta.swapSignature = b.dataset.swap;
+      renderAll();
+    });
+
     const qs = document.getElementById("quickStatus");
     if (qs) qs.addEventListener("change", () => {
       draft.status = qs.value;
@@ -426,6 +485,30 @@
         draft.customer[el.dataset.c] = el.value;
         renderPreview();
       });
+    });
+
+    const csigPick = document.querySelector('[data-img-pick="csig"]');
+    if (csigPick) csigPick.addEventListener("click", () => {
+      const input = document.querySelector('[data-img-input="csig"]');
+      if (input) input.click();
+    });
+    const csigClear = document.querySelector('[data-img-clear="csig"]');
+    if (csigClear) csigClear.addEventListener("click", () => {
+      draft.customer.signatureImg = "";
+      renderAll();
+    });
+    const csigInput = document.querySelector('[data-img-input="csig"]');
+    if (csigInput) csigInput.addEventListener("change", async () => {
+      const file = csigInput.files && csigInput.files[0];
+      csigInput.value = "";
+      if (!file) return;
+      try {
+        draft.customer.signatureImg = await readImageFile(file, 320);
+        renderAll();
+      } catch (e) {
+        error = (e && e.message) || "Gagal memuat gambar.";
+        renderAll();
+      }
     });
 
     const kw = document.getElementById("kwAmt");
@@ -441,6 +524,13 @@
       el.addEventListener("input", () => {
         draft.meta = draft.meta || {};
         draft.meta[el.dataset.f] = el.value;
+        renderPreview();
+      });
+    });
+
+    document.querySelectorAll("[data-sig]").forEach((el) => {
+      el.addEventListener("input", () => {
+        draft.company[el.dataset.sig] = el.value;
         renderPreview();
       });
     });
@@ -489,7 +579,7 @@
       type: draft.type,
       number,
       date: draft.date || todayISO(),
-      company: normalizeCompany(settings.company),
+      company: normalizeCompany({ ...settings.company, ...draft.company }),
       customer: normalizeCustomer(draft.customer),
       items: draft.items.map((it) => ({ ...it })),
       meta: { ...draft.meta },

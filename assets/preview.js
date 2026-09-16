@@ -9,11 +9,14 @@ function letterheadHTML(co, right) {
   if (co.npkp) tax.push(`NPKP: <span class="mono">${esc(co.npkp)}</span>`);
   return `
   <div class="letterhead">
-    <div style="min-width:0">
-      <div class="lh-name">${esc(co.name || "Nama Perusahaan")}</div>
-      ${co.address ? `<div class="lh-addr">${esc(co.address)}</div>` : ""}
-      ${contact ? `<div class="lh-contact">${esc(contact)}</div>` : ""}
-      ${tax.length ? `<div class="lh-tax">${tax.join('<span class="lh-sep">•</span>')}</div>` : ""}
+    <div class="lh-left">
+      ${co.logo ? `<img class="lh-logo" src="${co.logo}" alt="Logo">` : ""}
+      <div style="min-width:0">
+        <div class="lh-name">${esc(co.name || "Nama Perusahaan")}</div>
+        ${co.address ? `<div class="lh-addr">${esc(co.address)}</div>` : ""}
+        ${contact ? `<div class="lh-contact">${esc(contact)}</div>` : ""}
+        ${tax.length ? `<div class="lh-tax">${tax.join('<span class="lh-sep">•</span>')}</div>` : ""}
+      </div>
     </div>
     ${right || ""}
   </div>`;
@@ -90,15 +93,30 @@ function totalsHTML(doc, totals, showPpn, title) {
   return `<div class="totals"><div class="totals-box">${lines.join("")}</div></div>`;
 }
 
+function sigSpaceHTML(img, h, align) {
+  if (!img) return `<div class="sig-space" style="height:${h || 68}px"></div>`;
+  const just = align === "end" ? "justify-content:flex-end" : "justify-content:center";
+  return `<div class="sig-space sig-space-img" style="height:${h || 68}px;${just}"><img class="sig-img" src="${img}" alt="Tanda tangan"></div>`;
+}
+
 function signaturesHTML(doc, def) {
   if (!def.signatures || !def.signatures.length) return "";
   const nameOf = (p) => (p === "company" ? doc.company.signatory : doc.customer.name) || "";
   const titleOf = (p) => (p === "company" && doc.company.signatory ? doc.company.signatoryTitle : "");
+  const imgOf = (p) => (p === "company" ? doc.company.signatureImg : (doc.customer.signatureImg || ""));
   const single = def.signatures.length === 1;
-  const sigs = def.signatures.map((s) => `
+  // meta.swapSignature: "swap" = tukar kolom, "img" = tukar hanya gambar TTD
+  const swap = (doc.meta && doc.meta.swapSignature) || "";
+  const cols = def.signatures.map((s) => ({ s, img: imgOf(s.party) }));
+  if (swap === "img" && cols.length >= 2) {
+    const imgs = cols.map((c) => c.img);
+    cols.forEach((c, i) => { c.img = imgs[imgs.length - 1 - i]; });
+  }
+  const list = swap === "swap" && cols.length >= 2 ? cols.slice().reverse() : cols;
+  const sigs = list.map(({ s, img }) => `
     <div class="sig">
       <div class="sig-label">${esc(s.label)}</div>
-      <div class="sig-space"></div>
+      ${sigSpaceHTML(img, 68, single ? "end" : "center")}
       <div class="sig-line">
         <div class="sig-name">${esc(nameOf(s.party)) || "_____________________"}</div>
         ${titleOf(s.party) ? `<div class="sig-title">${esc(titleOf(s.party))}</div>` : ""}
@@ -133,6 +151,7 @@ function strukHTML(doc, totals) {
   <div class="paper paper--struk" id="print-root">
     <div class="struk">
       <div class="ctr">
+        ${doc.company.logo ? `<img class="struk-logo" src="${doc.company.logo}" alt="Logo">` : ""}
         <div class="shop">${esc(doc.company.name || "Nama Toko")}</div>
         ${doc.company.address ? `<div class="tiny">${esc(doc.company.address)}</div>` : ""}
         ${doc.company.phone ? `<div class="tiny">Telp ${esc(doc.company.phone)}</div>` : ""}
@@ -164,10 +183,13 @@ function kwitansiHTML(doc, totals, def) {
         <div class="kw-title">KWITANSI</div>
         <div class="kw-num">Nomor : <span class="mono" style="font-weight:600;color:var(--ink)">${esc(doc.number || "(otomatis)")}</span></div>
       </div>
-      <div class="kw-co">
-        <div class="n">${esc(doc.company.name)}</div>
-        ${doc.company.address ? `<div>${esc(doc.company.address)}</div>` : ""}
-        ${doc.company.phone ? `<div>${esc(doc.company.phone)}</div>` : ""}
+      <div class="kw-co-wrap">
+        <div class="kw-co">
+          <div class="n">${esc(doc.company.name)}</div>
+          ${doc.company.address ? `<div>${esc(doc.company.address)}</div>` : ""}
+          ${doc.company.phone ? `<div>${esc(doc.company.phone)}</div>` : ""}
+        </div>
+        ${doc.company.logo ? `<img class="kw-logo" src="${doc.company.logo}" alt="Logo">` : ""}
       </div>
     </div>
 
@@ -184,23 +206,27 @@ function kwitansiHTML(doc, totals, def) {
 
     <div class="kw-foot">
       <div class="kw-city">${esc((doc.meta && doc.meta.kota) || "· · ·")}, ${esc(formatDateID(doc.date))}</div>
-      <div class="kw-sigs">
+      <div class="kw-sigs">${(() => {
+        const swap = (doc.meta && doc.meta.swapSignature) || "";
+        const cols = [
+          { label: "Yang Menerima", img: doc.company.signatureImg, name: doc.company.signatory, title: doc.company.signatoryTitle },
+          { label: "Yang Memberikan", img: doc.customer.signatureImg, name: doc.customer.name, title: "" },
+        ];
+        if (swap === "img") {
+          const imgs = cols.map((c) => c.img);
+          cols.forEach((c, i) => { c.img = imgs[imgs.length - 1 - i]; });
+        }
+        const list = swap === "swap" ? cols.slice().reverse() : cols;
+        return list.map((c) => `
         <div class="kw-sig">
-          <div class="sig-label">Yang Menerima</div>
-          <div class="kw-sig-space"></div>
+          <div class="sig-label">${esc(c.label)}</div>
+          ${sigSpaceHTML(c.img, 70)}
           <div class="sig-line">
-            <div class="sig-name">${esc(doc.company.signatory) || "____________________"}</div>
-            ${doc.company.signatoryTitle ? `<div class="sig-title">${esc(doc.company.signatoryTitle)}</div>` : ""}
+            <div class="sig-name">${esc(c.name) || "____________________"}</div>
+            ${c.title ? `<div class="sig-title">${esc(c.title)}</div>` : ""}
           </div>
-        </div>
-        <div class="kw-sig">
-          <div class="sig-label">Yang Memberikan</div>
-          <div class="kw-sig-space"></div>
-          <div class="sig-line">
-            <div class="sig-name">${esc(doc.customer.name) || "____________________"}</div>
-          </div>
-        </div>
-      </div>
+        </div>`).join("");
+      })()}</div>
     </div>
     ${footerHTML(doc)}
   </div>`;
@@ -299,7 +325,7 @@ function suratHTML(doc, def) {
         <div>Tanggal&nbsp;&nbsp;: ${esc(formatDateLongID(doc.date))}</div>
       </div>
     </div>
-    <h1 class="surat-title">${esc(def.docTitle)}</h1>
+    <h1 class="surat-title${def.tightTitle ? " surat-title-tight" : ""}">${esc(def.docTitle)}</h1>
     <div class="surat-body">${body}</div>
     ${signaturesHTML(doc, def)}
     ${footerHTML(doc)}

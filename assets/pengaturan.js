@@ -30,6 +30,23 @@
           <label class="label">Nama Perusahaan</label>
           <input class="input" data-co="name" value="${esc(c.name)}" />
         </div>
+        <div class="span2 imgup-row">
+          ${["logo", "signatureImg"].map((key) => `
+          <div class="imgup">
+            <label class="label">${key === "logo" ? "Logo Perusahaan" : "Tanda Tangan (TTD)"}</label>
+            <div class="imgup-box" data-img-box="${key}">
+              ${c[key] ? `<img src="${c[key]}" alt="">` : `<span class="imgup-ph">${ic("image", 20)}</span>`}
+            </div>
+            <div class="imgup-btns">
+              <button class="btn-ghost sm" type="button" data-img-pick="${key}">${ic("upload", 14)} ${c[key] ? "Ganti" : "Unggah"}</button>
+              ${c[key] ? `<button class="btn-ghost sm danger" type="button" data-img-clear="${key}">${ic("trash", 14)} Hapus</button>` : ""}
+            </div>
+            <p class="hint">${key === "logo"
+              ? "Tampil di kop dokumen &amp; struk. PNG transparan disarankan, maks. 5 MB."
+              : "Gambar tanda tangan untuk kolom TTD di dokumen."}</p>
+            <input type="file" accept="image/*" data-img-input="${key}" style="display:none" />
+          </div>`).join("")}
+        </div>
         <div class="span2">
           <label class="label">Alamat</label>
           <textarea class="input" rows="2" data-co="address">${esc(c.address)}</textarea>
@@ -131,6 +148,49 @@
 
   document.querySelectorAll("[data-co]").forEach((el) => {
     el.addEventListener("input", () => { s.company[el.dataset.co] = el.value; });
+  });
+
+  function refreshImageWidgets() {
+    ["logo", "signatureImg"].forEach((key) => {
+      const val = s.company[key] || "";
+      const box = document.querySelector(`[data-img-box="${key}"]`);
+      if (box) box.innerHTML = val ? `<img src="${val}" alt="">` : `<span class="imgup-ph">${ic("image", 20)}</span>`;
+      const pick = document.querySelector(`[data-img-pick="${key}"]`);
+      if (pick) pick.innerHTML = `${ic("upload", 14)} ${val ? "Ganti" : "Unggah"}`;
+      const clr = document.querySelector(`[data-img-clear="${key}"]`);
+      if (clr) clr.style.display = val ? "" : "none";
+    });
+  }
+
+  document.querySelectorAll("[data-img-pick]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const input = document.querySelector(`[data-img-input="${btn.dataset.imgPick}"]`);
+      if (input && input.click) input.click();
+    });
+  });
+
+  document.querySelectorAll("[data-img-clear]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      s.company[btn.dataset.imgClear] = "";
+      refreshImageWidgets();
+      showMsg("ok", "Gambar dihapus. Klik Simpan Pengaturan untuk menyimpan.");
+    });
+  });
+
+  document.querySelectorAll("[data-img-input]").forEach((input) => {
+    input.addEventListener("change", async () => {
+      const key = input.dataset.imgInput;
+      const file = input.files && input.files[0];
+      input.value = "";
+      if (!file) return;
+      try {
+        s.company[key] = await readImageFile(file, key === "logo" ? 512 : 320);
+        refreshImageWidgets();
+        showMsg("ok", (key === "logo" ? "Logo" : "Tanda tangan") + " dimuat. Klik Simpan Pengaturan.");
+      } catch (e) {
+        showMsg("err", (e && e.message) || "Gagal memuat gambar.");
+      }
+    });
   });
   document.querySelectorAll("[data-pfx]").forEach((el) => {
     el.addEventListener("input", () => {

@@ -175,6 +175,64 @@ function runScript(file) {
   check(renderDocPaper(docFor("kuasa")).includes("PEMBERI KUASA"), "kuasa: pemberi kuasa");
   check(renderDocPaper(docFor("invoice", { customer: { name: "<img src=x onerror=1>" } })).includes("&lt;img src=x onerror=1&gt;"), "escape karakter berbahaya");
 
+  /* logo perusahaan & TTD gambar di profil perusahaan */
+  const LOGO = "data:image/png;base64,iVBORw0KGgoAAA==";
+  const TTD = "data:image/png;base64,AAAAzz0KGgoAAA==";
+  const coImg = { ...loadSettings().company, logo: LOGO, signatureImg: TTD };
+  const docImg = docFor("invoice");
+  docImg.company = coImg;
+  const notaPaper = renderDocPaper(docImg);
+  check(notaPaper.includes('class="lh-logo"') && notaPaper.includes(LOGO), "logo tampil di kop dokumen");
+  check(notaPaper.includes('class="sig-img"') && notaPaper.includes(TTD), "TTD gambar tampil di kolom tanda tangan");
+
+  const strukPaper = renderDocPaper(docFor("struk", { company: coImg }));
+  check(strukPaper.includes('class="struk-logo"'), "logo tampil di struk thermal");
+
+  const kwPaper = renderDocPaper(docFor("kwitansi", { company: coImg }));
+  check(kwPaper.includes('class="sig-img"'), "TTD gambar tampil di kwitansi");
+  check(kwPaper.includes('class="kw-logo"') && kwPaper.includes(LOGO), "kwitansi: logo tampil di kop");
+
+  /* TTD pihak pelanggan (Yang Memberikan / Pihak Penerima) */
+  const CUST_TTD = "data:image/png;base64,CUSTzz0KGgoAAA==";
+  const kwCust = renderDocPaper(docFor("kwitansi", { company: coImg, customer: { name: "Siti Aminah", signatureImg: CUST_TTD } }));
+  check(kwCust.includes("Yang Memberikan") && kwCust.includes(CUST_TTD), "kwitansi: TTD Yang Memberikan tampil");
+  check(kwCust.includes("Yang Menerima") && kwCust.includes(TTD), "kwitansi: TTD Yang Menerima tetap tampil");
+
+  const ndPaper = renderDocPaper(docFor("nota-debet", { customer: { name: "Budi", signatureImg: CUST_TTD } }));
+  check(ndPaper.includes("Pihak Penerima") && ndPaper.includes(CUST_TTD), "nota debet: TTD pihak pelanggan tampil");
+
+  const plainPaper = renderDocPaper(docFor("nota"));
+  check(!plainPaper.includes("lh-logo") && !plainPaper.includes("sig-img"), "tanpa gambar: tidak ada elemen gambar");
+
+  /* Tukar posisi tanda tangan (meta.swapSignature: "swap" | "img") */
+  const CUST_TTD2 = "data:image/png;base64,CUSTzz0KGgoAAA==";
+  const sigNames = (html) => (html.match(/class="sig-name">([^<]*)</g) || []).map((s) => s.slice(s.indexOf(">") + 1, -1));
+  const sigImgs = (html) => (html.match(/src="(data:image\/png;base64,[^"]*)"[^>]*alt="Tanda tangan"/g) || []).map((s) => s.slice(5, s.indexOf('"', 5)));
+  const sjA = renderDocPaper(docFor("surat-jalan", { company: coImg, customer: { name: "Budi", signatureImg: CUST_TTD2 } }));
+  const sjB = renderDocPaper(docFor("surat-jalan", { company: coImg, customer: { name: "Budi", signatureImg: CUST_TTD2 }, meta: { swapSignature: "swap" } }));
+  const sjC = renderDocPaper(docFor("surat-jalan", { company: coImg, customer: { name: "Budi", signatureImg: CUST_TTD2 }, meta: { swapSignature: "img" } }));
+  check(sjA.includes("Petugas Mengantar") && sjA.includes("Penerima Barang"), "surat jalan: 2 kolom TTD");
+  check(sjB.includes("Petugas Mengantar") && sjB.includes("Penerima Barang"), "swap: label tetap utuh");
+  check(sjC.includes("Petugas Mengantar") && sjC.includes("Penerima Barang"), "img-swap: label tetap utuh");
+  check(sigNames(sjA)[0] === "Dewi Anggraini" && sigNames(sjA)[1] === "Budi", "tanpa swap: perusahaan kiri, pelanggan kanan", JSON.stringify(sigNames(sjA)));
+  check(sigNames(sjB)[0] === "Budi" && sigNames(sjB)[1] === "Dewi Anggraini", "swap: posisi nama terbalik", JSON.stringify(sigNames(sjB)));
+  check(sigNames(sjC)[0] === "Dewi Anggraini" && sigNames(sjC)[1] === "Budi", "img-swap: nama tetap di posisinya", JSON.stringify(sigNames(sjC)));
+  check(sigImgs(sjA)[0] === TTD && sigImgs(sjA)[1] === CUST_TTD2, "tanpa swap: TTD perusahaan kiri", JSON.stringify(sigImgs(sjA)));
+  check(sigImgs(sjC)[0] === CUST_TTD2 && sigImgs(sjC)[1] === TTD, "img-swap: hanya gambar yang bertukar", JSON.stringify(sigImgs(sjC)));
+
+  const kwA = renderDocPaper(docFor("kwitansi", { company: coImg, customer: { name: "Siti", signatureImg: CUST_TTD2 } }));
+  const kwB = renderDocPaper(docFor("kwitansi", { company: coImg, customer: { name: "Siti", signatureImg: CUST_TTD2 }, meta: { swapSignature: "swap" } }));
+  const kwC = renderDocPaper(docFor("kwitansi", { company: coImg, customer: { name: "Siti", signatureImg: CUST_TTD2 }, meta: { swapSignature: "img" } }));
+  check(sigNames(kwA)[0] === "Dewi Anggraini" && sigNames(kwA)[1] === "Siti", "kwitansi: Yang Menerima kiri", JSON.stringify(sigNames(kwA)));
+  check(sigNames(kwB)[0] === "Siti" && sigNames(kwB)[1] === "Dewi Anggraini", "kwitansi swap: Yang Memberikan kiri", JSON.stringify(sigNames(kwB)));
+  check(sigNames(kwC)[0] === "Dewi Anggraini" && sigNames(kwC)[1] === "Siti", "kwitansi img-swap: nama tetap", JSON.stringify(sigNames(kwC)));
+  check(sigImgs(kwC)[0] === CUST_TTD2 && sigImgs(kwC)[1] === TTD, "kwitansi img-swap: hanya gambar bertukar", JSON.stringify(sigImgs(kwC)));
+
+  const single = renderDocPaper(docFor("nota", { meta: { swapSignature: "swap" } }));
+  check(sigNames(single).length === 1, "tipe 1 TTD: swap tidak menambah kolom", JSON.stringify(sigNames(single)));
+  const singleImg = renderDocPaper(docFor("nota", { meta: { swapSignature: "img" } }));
+  check(sigNames(singleImg).length === 1, "tipe 1 TTD: img-swap tidak menambah kolom", JSON.stringify(sigNames(singleImg)));
+
   /* ================= 3. Editor ================= */
   console.log("\n[3] Alur editor");
   global.location.pathname = "/baru.html";
@@ -268,6 +326,14 @@ function runScript(file) {
   rst.dispatch("click");
   elements["saveBtn"].dispatch("click");
   check(loadSettings().counters.invoice.seq === 0, "pengaturan: reset counter tersimpan");
+
+  /* ================= 5. CSS (posisi TTD & logo) ================= */
+  console.log("\n[5] CSS dokumen");
+  const css = fs.readFileSync(dir + "style.css", "utf8");
+  check(!/\.paper\s*\{[^}]*display:\s*flex/.test(css), "paper: bukan flex (TTD mengikuti konten)");
+  check(!/\.signatures\s*\{[^}]*margin-top:\s*auto/.test(css), "signatures: jarak tetap dari item");
+  check(!/\.kw-foot\s*\{[^}]*margin-top:\s*auto/.test(css), "kwitansi: TTD jarak tetap dari item");
+  check(/\.kw-logo\s*\{/.test(css), "kwitansi: kelas logo ada");
 
   /* ================= ringkasan ================= */
   console.log(`\n${fails === 0 ? "SEMUA TEST LULUS" : `${fails} TEST GAGAL`} (${n} asersi)`);
