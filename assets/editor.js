@@ -353,13 +353,47 @@
   }
 
   function renderPreview() {
-    mountScaledPreview(document.getElementById("previewHost"), draft);
+    const host = document.getElementById("previewHost");
+    // stempel interaktif: posisi/ukuran disimpan per-dokumen di meta.stamp
+    setStampState({
+      box: stampBoxIsLegacy(draft) ? null : stampBoxFromMeta(draft),
+      interactive: true,
+      onBox: null,
+    });
+    mountScaledPreview(host, draft);
+    // autoPlace: bila dokumen belum punya posisi stempel (format kertas),
+    // tempatkan menumpang di kolom TTD perusahaan
+    bindStampInteraction(
+      host,
+      () => readStampBox(),
+      (b) => saveStampBox(b),
+      { autoPlace: !hasStampBox(draft) },
+    );
     const t = totals();
     const chip = document.getElementById("totalChip");
     if (chip) {
       chip.textContent = formatRupiah(t.total);
       chip.style.display = t.total > 0 ? "" : "none";
     }
+  }
+
+  /** Baca box dari elemen .stamp-img di DOM. */
+  function readStampBox() {
+    const img = document.querySelector("#previewHost .stamp-img");
+    if (!img) return stampBoxFromMeta(draft);
+    return {
+      x: parseFloat(img.style.left) || 0,
+      y: parseFloat(img.style.top) || 0,
+      w: parseFloat(img.style.width) || 0,
+      h: parseFloat(img.style.height) || 0,
+    };
+  }
+
+  /** Simpan box ke meta dokumen (dipanggil saat drag selesai). */
+  function saveStampBox(b) {
+    draft.meta = draft.meta || {};
+    draft.meta.stamp = [Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h)].join(",");
+    draft.meta.stampV = STAMP_META_VERSION;
   }
 
   function refreshItems() {
@@ -605,6 +639,8 @@
 
   renderAll();
 
+  // kembali ke mode non-interaktif saat halaman lain / cetak
+  setStampState(null);
   if (params.get("print") === "1") {
     setTimeout(() => window.print(), 700);
   }

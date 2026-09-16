@@ -373,6 +373,7 @@ table.tbl tr:hover td { background: rgba(239, 244, 240, 0.5); }
   box-shadow: 0 14px 44px -16px rgba(23, 35, 28, 0.35);
   border: 1px solid rgba(0, 0, 0, 0.05);
   print-color-adjust: exact; -webkit-print-color-adjust: exact;
+  position: relative;
 }
 .paper--struk { width: 302px; min-height: 360px; padding: 18px; }
 
@@ -432,6 +433,29 @@ td.r { text-align: right; }
 .sig-space { height: 68px; }
 .sig-space-img { display: flex; align-items: flex-end; justify-content: center; }
 .sig-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.cursor-move { cursor: move; }
+
+/* Stempel menempel di kertas (.paper) sebagai overlay: bebas digeser &
+   diubah ukurannya ke mana saja di halaman, di luar kolom tanda tangan. */
+.stamp-wrap { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+.stamp-wrap.interactive { pointer-events: auto; }
+.stamp-img {
+  position: absolute; pointer-events: auto; outline: 0 solid transparent;
+  transition: outline-color 0.1s;
+}
+.stamp-img.stamp-active { outline: 1.5px dashed rgba(23, 127, 94, 0.75); outline-offset: 1px; opacity: 1 !important; }
+.stamp-handle {
+  position: absolute;
+  width: 12px; height: 12px;
+  background: #177f5e;
+  border: 1.5px solid #fff;
+  border-radius: 999px;
+  cursor: nwse-resize;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  z-index: 5;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
 .sig-line { border-top: 1px solid rgba(29, 38, 33, 0.3); padding-top: 4px; }
 .sig-name { font-size: 12px; font-weight: 700; }
 .sig-title { font-size: 10px; color: var(--ink-soft); }
@@ -504,6 +528,8 @@ td.r { text-align: right; }
 
 @media print {
   @page { size: A4; margin: 10mm; }
+  .stamp-handle { display: none !important; }
+  .stamp-img { cursor: default !important; }
   html, body { background: #fff !important; }
   aside.sidebar, .mobilenav, .no-print { display: none !important; }
   .main { padding: 0 !important; margin: 0 !important; max-width: none !important; width: 100% !important; }

@@ -31,9 +31,9 @@
           <input class="input" data-co="name" value="${esc(c.name)}" />
         </div>
         <div class="span2 imgup-row">
-          ${["logo", "signatureImg"].map((key) => `
+          ${["logo", "signatureImg", "stampImg"].map((key) => `
           <div class="imgup">
-            <label class="label">${key === "logo" ? "Logo Perusahaan" : "Tanda Tangan (TTD)"}</label>
+            <label class="label">${key === "logo" ? "Logo Perusahaan" : key === "signatureImg" ? "Tanda Tangan (TTD)" : "Stempel"}</label>
             <div class="imgup-box" data-img-box="${key}">
               ${c[key] ? `<img src="${c[key]}" alt="">` : `<span class="imgup-ph">${ic("image", 20)}</span>`}
             </div>
@@ -43,7 +43,9 @@
             </div>
             <p class="hint">${key === "logo"
               ? "Tampil di kop dokumen &amp; struk. PNG transparan disarankan, maks. 5 MB."
-              : "Gambar tanda tangan untuk kolom TTD di dokumen."}</p>
+              : key === "signatureImg"
+              ? "Gambar tanda tangan untuk kolom TTD di dokumen."
+              : "Stempel perusahaan yang tampil menumpang di pojok tanda tangan. PNG transparan disarankan."}</p>
             <input type="file" accept="image/*" data-img-input="${key}" style="display:none" />
           </div>`).join("")}
         </div>
@@ -151,7 +153,7 @@
   });
 
   function refreshImageWidgets() {
-    ["logo", "signatureImg"].forEach((key) => {
+    ["logo", "signatureImg", "stampImg"].forEach((key) => {
       const val = s.company[key] || "";
       const box = document.querySelector(`[data-img-box="${key}"]`);
       if (box) box.innerHTML = val ? `<img src="${val}" alt="">` : `<span class="imgup-ph">${ic("image", 20)}</span>`;
@@ -184,9 +186,9 @@
       input.value = "";
       if (!file) return;
       try {
-        s.company[key] = await readImageFile(file, key === "logo" ? 512 : 320);
+        s.company[key] = await readImageFile(file, key === "logo" ? 512 : key === "stampImg" ? 240 : 320);
         refreshImageWidgets();
-        showMsg("ok", (key === "logo" ? "Logo" : "Tanda tangan") + " dimuat. Klik Simpan Pengaturan.");
+        showMsg("ok", (key === "logo" ? "Logo" : key === "stampImg" ? "Stempel" : "Tanda tangan") + " dimuat. Klik Simpan Pengaturan.");
       } catch (e) {
         showMsg("err", (e && e.message) || "Gagal memuat gambar.");
       }

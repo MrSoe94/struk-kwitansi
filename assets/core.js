@@ -207,7 +207,7 @@ function typeById(id) {
   return DOC_TYPES.find((t) => t.id === id) || DOC_TYPES.find((t) => t.id === "invoice");
 }
 
-const EMPTY_COMPANY = { name:"", address:"", phone:"", email:"", website:"", npwp:"", npkp:"", signatory:"", signatoryTitle:"", logo:"", signatureImg:"" };
+const EMPTY_COMPANY = { name:"", address:"", phone:"", email:"", website:"", npwp:"", npkp:"", signatory:"", signatoryTitle:"", logo:"", signatureImg:"", stampImg:"" };
 const EMPTY_CUSTOMER = { name:"", address:"", phone:"", npwp:"", signatureImg:"" };
 
 function normalizeCompany(c) { return { ...EMPTY_COMPANY, ...(c || {}) }; }

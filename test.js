@@ -233,6 +233,47 @@ function runScript(file) {
   const singleImg = renderDocPaper(docFor("nota", { meta: { swapSignature: "img" } }));
   check(sigNames(singleImg).length === 1, "tipe 1 TTD: img-swap tidak menambah kolom", JSON.stringify(sigNames(singleImg)));
 
+  /* Stempel perusahaan (company.stampImg) menempel langsung di kertas (.paper)
+   * sebagai overlay: bebas digeser & diubah ukurannya ke mana saja di halaman. */
+  const STAMP = "data:image/png;base64,STMPzz0KGgoAAA==";
+  const docStamp = (over) => docFor("surat-jalan", { company: { ...coImg, stampImg: STAMP }, customer: { name: "Budi", signatureImg: CUST_TTD2 }, ...(over || {}) });
+  const stA = renderDocPaper(docStamp());
+  const stB = renderDocPaper(docFor("kwitansi", { company: { ...coImg, stampImg: STAMP }, customer: { name: "Siti", signatureImg: CUST_TTD2 } }));
+  const stC = renderDocPaper(docFor("surat-jalan", { company: coImg, customer: { name: "Budi", signatureImg: CUST_TTD2 } }));
+  const stStruk = renderDocPaper(docFor("struk", { company: { ...coImg, stampImg: STAMP } }));
+  check(stA.includes("sig-stamp") && stA.includes(STAMP), "stempel tampil di kertas (surat jalan)");
+  check(stB.includes("sig-stamp") && stB.includes(STAMP), "stempel tampil di layout kwitansi");
+  check(stStruk.includes("sig-stamp") && stStruk.includes(STAMP), "stempel tampil juga di kertas struk thermal");
+  check(!stC.includes("sig-stamp"), "tanpa stampImg: tidak ada elemen stempel");
+  const stampCount = (html) => (html.match(/class="[^"]*stamp-img[^"]*"/g) || []).length;
+  check(stampCount(stA) === 1, "stempel hanya 1 (bukan per kolom TTD)", String(stampCount(stA)));
+  // overlay menempel langsung di kertas, di luar kolom tanda tangan
+  check(/<div[^>]*class="[^"]*paper[^"]*"[^>]*><div class="stamp-wrap/.test(stA), "overlay stempel adalah child pertama kertas");
+  check(!/sig-space[^>]*>.*?stamp-wrap/.test(stA.replace(/\s+/g, " ")), "stempel tidak lagi di dalam kolom TTD");
+  // posisi/ukuran dari meta.stamp (format "x,y,w,h") + stampV diterapkan di style
+  const stD = renderDocPaper(docStamp({ meta: { stamp: "10,20,120,60", stampV: 2 } }));
+  check(/left:10px;top:20px;width:120px;height:60px/.test(stD), "meta.stamp (x,y,w,h) + stampV diterapkan di posisi/ukuran stempel");
+  // meta.stamp versi lama (posisi relatif kolom TTD, tanpa stampV) diabaikan
+  const stLegacy = renderDocPaper(docStamp({ meta: { stamp: "10,20,120,60" } }));
+  check(!/left:10px/.test(stLegacy), "meta.stamp versi lama (tanpa stampV) tidak dipakai");
+  // default dipakai bila meta.stamp kosong
+  check(/left:2px;top:16px/.test(stA), "tanpa meta.stamp: pakai posisi default");
+
+  /* Handle resize: harus dirender di pojok kanan-bawah stempel (mode interaktif).
+   * Bug lama: handle tak punya posisi awal -> muncul di pojok kiri-atas. */
+  setStampState({ box: { x: 10, y: 20, w: 120, h: 60 }, interactive: true, onBox: null });
+  const stE = renderDocPaper(docStamp({ meta: { stamp: "10,20,120,60", stampV: 2 } }));
+  setStampState(null);
+  check(
+    /class="stamp-handle"[^>]*style="left:130px;top:80px/.test(stE),
+    "handle resize tampil di pojok kanan-bawah stempel (x+w, y+h)",
+  );
+  const stF = renderDocPaper(docStamp({ meta: { stamp: "5,8,90,40", stampV: 2 } }));
+  check(
+    !/class="stamp-handle"[^>]*style=/.test(stF),
+    "mode lihat (non-interaktif): tidak ada handle resize",
+  );
+
   /* ================= 3. Editor ================= */
   console.log("\n[3] Alur editor");
   global.location.pathname = "/baru.html";
